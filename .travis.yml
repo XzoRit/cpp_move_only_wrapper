@@ -1,0 +1,118 @@
+dist: trusty
+sudo: false
+language: cpp
+
+matrix:
+  include:
+    # gcc-9
+    - env: CC_COMPILER=gcc-9 CXX_COMPILER=g++-9 TOOLSET=gcc-9 BOOST_VERSION=1.72.0 CMAKE_OPTIONS="-DCMAKE_CXX_STANDARD=17 -DCMAKE_CXX_STANDARD_REQUIRED=ON"
+      addons: { apt: { packages: ["g++-9"], sources: ["ubuntu-toolchain-r-test"] } }
+
+install:
+  ############################################################################
+  # All the dependencies are installed in ${HOME}/deps/
+  ############################################################################
+  - DEPS_DIR="${HOME}/deps"
+  - mkdir -p ${DEPS_DIR} && cd ${DEPS_DIR}
+
+  ############################################################################
+  # Setup default versions and override CXX set by Travis if needed
+  ############################################################################
+  - if [[ "${CC_COMPILER}" != "" ]]; then export CC=${CC_COMPILER}; fi
+  - if [[ "${CXX_COMPILER}" != "" ]]; then export CXX=${CXX_COMPILER}; fi
+  - ${CC} --version
+  - ${CXX} --version
+
+  ############################################################################
+  # Install Boost headers
+  ############################################################################
+  - |
+    if [[ "${BOOST_VERSION}" != "" ]]; then
+      BOOST_DIR=${DEPS_DIR}/boost-${BOOST_VERSION}
+      if [[ "${BOOST_VERSION}" == "trunk" ]]; then
+        BOOST_URL="http://github.com/boostorg/boost.git"
+        travis_retry git clone --depth 1 --recursive ${BOOST_URL} ${BOOST_DIR} || exit 1
+        (cd ${BOOST_DIR} && ./bootstrap.sh && ./b2 headers) || exit 1
+      else
+        BOOST_URL="https://dl.bintray.com/boostorg/release/${BOOST_VERSION}/source/boost_${BOOST_VERSION//\./_}.tar.gz"
+        mkdir -p ${BOOST_DIR}
+        { travis_retry wget -O - ${BOOST_URL} | tar --strip-components=1 -xz -C ${BOOST_DIR}; } || exit 1
+      fi
+      CMAKE_OPTIONS+=" -DBOOST_ROOT=${BOOST_DIR}"
+    fi
+
+  ############################################################################
+  # Install a recent CMake
+  ############################################################################
+  - |
+    if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then
+      CMAKE_URL="https://cmake.org/files/v3.16/cmake-3.16.4-Linux-x86_64.tar.gz"
+      mkdir cmake && travis_retry wget --no-check-certificate --quiet -O - ${CMAKE_URL} | tar --strip-components=1 -xz -C cmake
+      export PATH=${DEPS_DIR}/cmake/bin:${PATH}
+    else
+      brew install cmake || brew upgrade cmake
+    fi
+  - cmake --version
+
+  ############################################################################
+  # Install b2
+  ############################################################################
+  - (cd ${BOOST_DIR}/tools/build && ./bootstrap.sh && ./b2 install --prefix=${DEPS_DIR}/b2)
+  - export PATH=${DEPS_DIR}/b2/bin:${PATH}
+  - export BOOST_BUILD_PATH=${BOOST_DIR}/tools/build
+  - export BOOST_ROOT=${BOOST_DIR}
+  - b2 --version || true # b2 --version returns 1
+
+before_script:
+  ############################################################################
+  # Build needed boost libs
+  # This is needed for the cmake build which utilizes find_package to find
+  # prebuilt versions of boost libs
+  # The b2 build will build the libs needed since a build dependency is
+  # formulated in the according jamfiles
+  ############################################################################
+  - cd ${BOOST_DIR}
+  - |
+    b2 --with-program_options --with-test toolset=${TOOLSET} cxxflags="-std=c++17 ${CXXFLAGS}" || exit 1
+
+  ############################################################################
+  # Go back to the root of the project and setup the build directory
+  ############################################################################
+  - cd "${TRAVIS_BUILD_DIR}"
+
+  ############################################################################
+  # cmake
+  ############################################################################
+  - mkdir build_cmake
+  - cmake -B ./build_cmake -S ./ ${CMAKE_OPTIONS}
+
+  ############################################################################
+  # b2
+  ############################################################################
+  - mkdir build_boost
+
+script:
+  - cd "${TRAVIS_BUILD_DIR}"
+
+  ############################################################################
+  # Check for common formatting errors.
+  ############################################################################
+  - sources=($(find lib app -name "*.hpp" -or -name "*.cpp"))
+  - LANG=POSIX grep '[^[:print:][:cntrl:]]' "${sources[@]}"; [[ $? == 1 ]] || exit 1 # Non-ASCII character
+  - LANG=POSIX grep $'\r'                   "${sources[@]}"; [[ $? == 1 ]] || exit 1 # '\r' (CR) character
+  - LANG=POSIX grep $'\t'                   "${sources[@]}"; [[ $? == 1 ]] || exit 1 # Tab character
+  - LANG=POSIX grep '[[:blank:]]$'          "${sources[@]}"; [[ $? == 1 ]] || exit 1 # Trailing whitespace
+
+  ############################################################################
+  # Build with cmake execute tests with ctest
+  ############################################################################
+  - cd "${TRAVIS_BUILD_DIR}"
+  - cmake --build ./build_cmake
+  - (cd build_cmake && ctest --output-on-failure)
+
+  ############################################################################
+  # Build and execute tests with b2
+  ############################################################################
+  - cd "${TRAVIS_BUILD_DIR}"
+  - |
+    b2 --build-dir=./build_boost toolset=${TOOLSET} cxxflags="-std=c++17 ${CXXFLAGS}" || exit 1
