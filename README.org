@@ -14,7 +14,7 @@ b2 --build-dir=./build_boost -q toolset=gcc-9 app//exe
 b2 --build-dir=./build_boost -q toolset=gcc-9 app//run
 *** CMake
 **** configure
-mkdir build_cmake
+mkdir build_cmake_gcc_9
 cmake -B ./build_cmake_gcc9 -S ./ -DCMAKE_C_COMPILER=gcc-9 -DCMAKE_CXX_COMPILER=g++-9
 **** build
 cmake --build ./build_cmake_gcc9 --target all
