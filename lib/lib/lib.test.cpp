@@ -14,6 +14,11 @@ struct I
 
 struct II : I
 {
+    II() = default;
+    explicit II(int v)
+        : value_{v}
+    {
+    }
     int value() override
     {
         return value_;
@@ -28,7 +33,7 @@ struct II : I
 struct A
 {
     using Dep = std::unique_ptr<I>;
-    A(Dep dep)
+    explicit A(Dep dep)
         : dep_{std::move(dep)}
     {
     }
@@ -82,6 +87,11 @@ BOOST_AUTO_TEST_CASE(lib_unique_ptr)
         auto a = A{i.move()};
         BOOST_TEST(a.value() == 0);
         i.get()->value(1);
+        BOOST_TEST(a.value() == 1);
+    }
+    {
+        auto i = rvalue_ref<II>(1);
+        auto a = A{i.move()};
         BOOST_TEST(a.value() == 1);
     }
 }

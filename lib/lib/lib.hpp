@@ -26,10 +26,10 @@ struct rvalue_ref_wrapper
     A* ptr_{};
 };
 
-template <class A>
-inline rvalue_ref_wrapper<A> rvalue_ref()
+template <class A, class... Args>
+inline rvalue_ref_wrapper<A> rvalue_ref(Args&&... args)
 {
-    return rvalue_ref_wrapper<A>{new A{}};
+    return rvalue_ref_wrapper<A>{new A{std::forward<Args>(args)...}};
 }
 } // namespace v1
 } // namespace lib
