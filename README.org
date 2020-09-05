@@ -1,4 +1,4 @@
-[[https://travis-ci.org/XzoRit/cpp_starter][https://travis-ci.org/XzoRit/cpp_move_only_wrapper.svg?branch=master]]
+[[https://travis-ci.org/XzoRit/cpp_move_only_wrapper.svg?branch=master][https://travis-ci.org/XzoRit/cpp_move_only_wrapper.svg?branch=master]]
 * references to move onely types
 ** build files
 Boost.Build and CMake build files are available.
