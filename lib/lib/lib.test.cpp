@@ -2,8 +2,9 @@
 
 #include <boost/test/unit_test.hpp>
 
-using xzr::lib::add;
-using xzr::lib::rvalue_ref;
+#include <functional>
+
+using xzr::lib::uptr_ref;
 
 struct I
 {
@@ -46,53 +47,43 @@ struct A
 
 namespace
 {
-BOOST_AUTO_TEST_SUITE(lib_tests)
+BOOST_AUTO_TEST_SUITE(suite_uptr_ref)
 
-BOOST_AUTO_TEST_CASE(lib_add)
-{
-    BOOST_TEST(add(1, 3) == 4);
-}
-
-BOOST_AUTO_TEST_CASE(lib_unique_ptr)
+BOOST_AUTO_TEST_CASE(test_uptr_ref)
 {
     {
-        auto a = A{std::make_unique<II>()};
-        BOOST_TEST(a.value() == 0);
-    }
-    // {
-    //     auto i = std::make_unique<II>();
-    //     auto a = A{std::move(i)};
-    //     i->value(1);
-    //     BOOST_TEST(a.value() == 1);
-    // }
-    {
-        auto i = rvalue_ref<II>();
-        auto a = i.move();
-        BOOST_TEST(a->value() == 0);
-        i.get()->value(1);
-        BOOST_TEST(a->value() == 1);
-        auto b = std::move(a);
-        BOOST_TEST(b->value() == 1);
-        i.get()->value(2);
-        BOOST_TEST(b->value() == 2);
+        auto i = uptr_ref<II>();
         {
-            auto a = A{std::move(b)};
-            BOOST_TEST(a.value() == 2);
-            i.get()->value(3);
-            BOOST_TEST(a.value() == 3);
-        }
+            std::unique_ptr<I> a = i.move();
+            BOOST_TEST(i.get() == a.get());
+
+            auto b = std::move(a);
+            BOOST_TEST(!a.get());
+            BOOST_TEST(b.get());
+            BOOST_TEST(i.get());
+            BOOST_TEST(i.get() == b.get());
+        } // c is destroyed and hence calls delete on given ptr
+        // so this MIGHT sefault
+        // BOOST_TEST(i.get());
+        // this WILL segfault
+        // BOOST_TEST(i->value() == 0);
     }
     {
-        auto i = rvalue_ref<II>();
-        auto a = A{i.move()};
-        BOOST_TEST(a.value() == 0);
-        i.get()->value(1);
-        BOOST_TEST(a.value() == 1);
+        auto i = uptr_ref<II>(1);
+        BOOST_TEST(i.get()->value() == 1);
+        BOOST_TEST(i->value() == 1);
     }
     {
-        auto i = rvalue_ref<II>(1);
+        auto i = uptr_ref<II>(1);
+        static_cast<void>(i.move());
+        BOOST_CHECK_THROW(i.move(), std::runtime_error);
+    }
+    {
+        auto i = uptr_ref<II>(1);
         auto a = A{i.move()};
         BOOST_TEST(a.value() == 1);
+        i->value(2);
+        BOOST_TEST(a.value() == 2);
     }
 }
 

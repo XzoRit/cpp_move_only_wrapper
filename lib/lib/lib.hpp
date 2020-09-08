@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <memory>
 
 namespace xzr
@@ -8,29 +9,47 @@ namespace lib
 {
 inline namespace v1
 {
-/// \brief returns the sum of a and b.
-///
-/// Just a simple sumation function with a nice documentation.
-int add(int a, int b);
 template <class A>
-struct rvalue_ref_wrapper
+class uptr_ref
 {
+  public:
+    using pointer = A*;
+    template <class... Args>
+    explicit uptr_ref(Args&&... args)
+        : ptr_{new A{std::forward<Args>(args)...}}
+    {
+    }
+    explicit uptr_ref(pointer a)
+        : ptr_{a}
+    {
+    }
     std::unique_ptr<A> move()
     {
-        return std::unique_ptr<A>{ptr_};
+        if (moved)
+            throw std::runtime_error{"can only be moved once"};
+        moved = true;
+        return std::unique_ptr<A>{get()};
     }
-    A* get()
+    pointer get()
     {
         return ptr_;
     }
-    A* ptr_{};
-};
+    pointer operator->()
+    {
+        return get();
+    }
+    ~uptr_ref()
+    {
+        if (!moved)
+        {
+            delete ptr_;
+            ptr_ = nullptr;
+        }
+    }
 
-template <class A, class... Args>
-inline rvalue_ref_wrapper<A> rvalue_ref(Args&&... args)
-{
-    return rvalue_ref_wrapper<A>{new A{std::forward<Args>(args)...}};
-}
+    pointer ptr_{nullptr};
+    bool moved{false};
+};
 } // namespace v1
 } // namespace lib
 } // namespace xzr
